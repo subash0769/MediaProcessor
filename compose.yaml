@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  python:
+    build: 
+      context: ./
+      dockerfile: backend/DockerFile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://myuser:mypassword@postgres:5432/mydatabase
+      - REDIS_URL=redis://redis:6379/0
+      - UPLOAD_DIR=/app/uploads
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - media_uploads:/app/uploads
+
+  worker:
+    build:
+      context: ./
+      dockerfile: backend/DockerFile
+    command: python -m app.worker
+    depends_on:
+      - python
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://myuser:mypassword@postgres:5432/mydatabase
+      - REDIS_URL=redis://redis:6379/0
+      - UPLOAD_DIR=/app/uploads
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - media_uploads:/app/uploads
+
+  node:
+    build: 
+      context: ./
+      dockerfile: frontend/DockerFile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - python
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+
+volumes:
+  postgres_data:
+    driver: local
+  media_uploads:
+    driver: local
